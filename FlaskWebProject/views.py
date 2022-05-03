@@ -126,18 +126,25 @@ def logout():
     return redirect(url_for('login'))
 
 def _load_cache():
-    # TODO: Load the cache from `msal`, if it exists
-    cache = None
+    cache = msal.SerializableTokenCache()
+    try:
+        cache.deserialize(session['token_cache'])
+    except KeyError:
+        pass
     return cache
 
 def _save_cache(cache):
-    # TODO: Save the cache, if it has changed
-    pass
+    if cache.has_state_changed:
+        session['token_cache'] = cache.serialize()
 
-def _build_msal_app(cache=None, authority=None):
-    # TODO: Return a ConfidentialClientApplication
-    return None
+def _build_msal_app(cache=None):
+    confidential_client_application = msal.ConfidentialClientApplication(
+        Config.CLIENT_ID, authority=Config.AUTHORITY,
+        client_credential=Config.CLIENT_SECRET, token_cache=cache
+        )
+    return confidential_client_application
 
-def _build_auth_url(authority=None, scopes=None, state=None):
-    # TODO: Return the full Auth Request URL with appropriate Redirect URI
-    return None
+def _build_auth_url(scopes=None, state=None):
+    return _build_msal_app().get_authorization_request_url(
+        scopes=scopes, state=state, redirect_uri=url_for('authorized', _external=True, _scheme='https')
+    )
