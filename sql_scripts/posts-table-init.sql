@@ -10,6 +10,8 @@ CREATE TABLE POSTS(
 	FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+ALTER TABLE posts ADD subtitle VARCHAR(350);
+
 INSERT INTO dbo.posts (title, author, body, user_id)
 VALUES (
     'Lorem ipsum dolor sit amet',

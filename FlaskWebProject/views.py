@@ -53,18 +53,32 @@ def post(id):
         return redirect(url_for('home'))
     return render_template(
         'post.html',
+        id=id,
         title='Edit Post',
         imageSource=imageSourceUrl,
         form=form
     )
 
+@app.route('/post/<int:id>/delete_image')
+@login_required
+def delete_image(id):
+    post = Post.query.get(int(id))
+    post.delete_image()
+    return redirect(url_for('post', id=id))
+
+@app.route('/post/<int:id>/delete')
+@login_required
+def delete_post(id):
+    post = Post.query.get(int(id))
+    post.delete_post()
+    return redirect(url_for('home'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        app.logger.debug(f'User {current_user} was already authenticated.')
+        app.logger.info(f'User {current_user} was already authenticated.')
         return redirect(url_for('home'))
     form = LoginForm()
-    app.logger.debug(f'{form.submit.data}, {form.submit_sign_up.data}')
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if form.submit_sign_up.data:
@@ -77,7 +91,7 @@ def login():
                 user.set_password(form.password.data)
                 db.session.add(user)
                 db.session.commit()
-                app.logger.debug(f'Created user "{str(form.username.data)}".')
+                app.logger.info(f'Created user "{str(form.username.data)}".')
         if user is None or not user.check_password(form.password.data):
             flash('Invalid username or password')
             app.logger.info(f'Failed login attempt with username "{str(form.username.data)}".')
@@ -100,14 +114,17 @@ def authorized():
         return render_template("auth_error.html", result=request.args)
     if request.args.get('code'):
         cache = _load_cache()
-        # TODO: Acquire a token from a built msal app, along with the appropriate redirect URI
-        result = None
+        result = _build_msal_app(cache=cache).acquire_token_by_authorization_code(
+            request.args['code'], scopes=Config.SCOPE, redirect_uri=url_for('authorized', _external=True, _scheme='https')
+        )
         if "error" in result:
             return render_template("auth_error.html", result=result)
         session["user"] = result.get("id_token_claims")
-        # Note: In a real app, we'd use the 'name' property from session["user"] below
-        # Here, we'll use the admin username for anyone who is authenticated by MS
-        user = User.query.filter_by(username="admin").first()
+        username = session['user']['preferred_username']
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            flash(f'User {username} unknown.')
+            return redirect(url_for('login'))
         login_user(user)
         _save_cache(cache)
     return redirect(url_for('home'))
