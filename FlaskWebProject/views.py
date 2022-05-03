@@ -61,17 +61,32 @@ def post(id):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        app.logger.debug(f'User {current_user} was already authenticated.')
         return redirect(url_for('home'))
     form = LoginForm()
+    app.logger.debug(f'{form.submit.data}, {form.submit_sign_up.data}')
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
+        if form.submit_sign_up.data:
+            if user is not None:
+                flash('Username already in use')
+                app.logger.info(f'Failed sign-up attempt with username "{str(form.username.data)}".')
+                return redirect(url_for('login'))
+            else:
+                user = User(username=form.username.data)
+                user.set_password(form.password.data)
+                db.session.add(user)
+                db.session.commit()
+                app.logger.debug(f'Created user "{str(form.username.data)}".')
         if user is None or not user.check_password(form.password.data):
             flash('Invalid username or password')
+            app.logger.info(f'Failed login attempt with username "{str(form.username.data)}".')
             return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
         next_page = request.args.get('next')
         if not next_page or url_parse(next_page).netloc != '':
             next_page = url_for('home')
+        app.logger.info(f'User "{str(form.username.data)}" logged in.')
         return redirect(next_page)
     session["state"] = str(uuid.uuid4())
     auth_url = _build_auth_url(scopes=Config.SCOPE, state=session["state"])
